@@ -6,6 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import init_db
+from app.errors import register_error_handlers
+from app.routers import profiles as profiles_router
 
 
 @asynccontextmanager
@@ -24,6 +26,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+register_error_handlers(app)
+app.include_router(profiles_router.router)
 
 
 @app.get("/")
