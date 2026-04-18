@@ -10,5 +10,14 @@ class Settings(BaseSettings):
     nationalize_url: str = "https://api.nationalize.io"
     upstream_timeout_seconds: float = 10.0
 
+    @property
+    def async_database_url(self) -> str:
+        url = self.database_url
+        if url.startswith("postgresql://"):
+            return "postgresql+asyncpg://" + url[len("postgresql://") :]
+        if url.startswith("postgres://"):
+            return "postgresql+asyncpg://" + url[len("postgres://") :]
+        return url
+
 
 settings = Settings()

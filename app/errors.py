@@ -16,7 +16,13 @@ def error_response(status_code: int, message: str) -> JSONResponse:
 def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def _validation_handler(request: Request, exc: RequestValidationError):
-        return error_response(422, "Invalid request body")
+        errors = exc.errors()
+        first = errors[0] if errors else {}
+        loc = first.get("loc", ())
+        where = loc[0] if loc else "body"
+        field = loc[-1] if len(loc) > 1 else None
+        subject = f"{where} parameter '{field}'" if field else where
+        return error_response(422, f"Invalid {subject}")
 
     @app.exception_handler(UpstreamError)
     async def _upstream_handler(request: Request, exc: UpstreamError):
