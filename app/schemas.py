@@ -8,6 +8,17 @@ class CreateProfileRequest(BaseModel):
     name: StrictStr | None = None
 
 
+class ProfileListItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+    gender: str
+    age: int
+    age_group: str
+    country_id: str
+
+
 class ProfileOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
