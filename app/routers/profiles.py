@@ -11,7 +11,7 @@ from app.database import get_session
 from app.dependencies import get_http_client
 from app.errors import error_response
 from app.models import Profile
-from app.schemas import CreateProfileRequest, ProfileListItemOut, ProfileOut
+from app.schemas import CreateProfileRequest, ProfileOut
 from app.services.external import enrich_name
 
 router = APIRouter(prefix="/api/profiles", tags=["profiles"])
@@ -31,9 +31,10 @@ async def create_profile(
         return error_response(400, "Missing or empty name")
 
     original = payload.name.strip()
-    name_key = Profile.normalize_name(original)
 
-    result = await session.execute(select(Profile).where(Profile.name_key == name_key))
+    result = await session.execute(
+        select(Profile).where(func.lower(Profile.name) == original.lower())
+    )
     existing = result.scalar_one_or_none()
     if existing is not None:
         return JSONResponse(
@@ -49,13 +50,12 @@ async def create_profile(
 
     profile = Profile(
         name=original,
-        name_key=name_key,
         gender=enrichment.gender,
         gender_probability=enrichment.gender_probability,
-        sample_size=enrichment.sample_size,
         age=enrichment.age,
         age_group=enrichment.age_group,
         country_id=enrichment.country_id,
+        country_name=enrichment.country_name,
         country_probability=enrichment.country_probability,
     )
     session.add(profile)
@@ -85,7 +85,7 @@ async def list_profiles(
 
     result = await session.execute(stmt)
     profiles = result.scalars().all()
-    data = [ProfileListItemOut.model_validate(p).model_dump(mode="json") for p in profiles]
+    data = [_serialize(p) for p in profiles]
     return JSONResponse(
         status_code=200,
         content={"status": "success", "count": len(data), "data": data},

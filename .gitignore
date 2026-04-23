@@ -19,3 +19,5 @@ env/
 *.egg-info/
 dist/
 build/
+PRODUCT.md
+UPDATED_PRODUCT.md

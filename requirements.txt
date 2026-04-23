@@ -7,3 +7,4 @@ httpx>=0.28
 pydantic>=2.11
 pydantic-settings>=2.7
 python-dotenv>=1.0
+pycountry>=24.0
