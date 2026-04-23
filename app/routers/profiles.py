@@ -1,8 +1,8 @@
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Query, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +13,13 @@ from app.errors import error_response
 from app.models import Profile
 from app.schemas import CreateProfileRequest, ProfileOut
 from app.services.external import enrich_name
+from app.services.queries import ProfileFilters, apply_filters
+
+SORT_COLUMNS = {
+    "age": Profile.age,
+    "created_at": Profile.created_at,
+    "gender_probability": Profile.gender_probability,
+}
 
 router = APIRouter(prefix="/api/profiles", tags=["profiles"])
 
@@ -71,24 +78,49 @@ async def create_profile(
 @router.get("")
 async def list_profiles(
     session: Annotated[AsyncSession, Depends(get_session)],
-    gender: str | None = None,
-    country_id: str | None = None,
-    age_group: str | None = None,
+    gender: str | None = Query(None),
+    age_group: str | None = Query(None),
+    country_id: str | None = Query(None),
+    min_age: int | None = Query(None, ge=0),
+    max_age: int | None = Query(None, ge=0),
+    min_gender_probability: float | None = Query(None, ge=0, le=1),
+    min_country_probability: float | None = Query(None, ge=0, le=1),
+    sort_by: Literal["age", "created_at", "gender_probability"] = Query("created_at"),
+    order: Literal["asc", "desc"] = Query("asc"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=50),
 ):
-    stmt = select(Profile)
-    if gender is not None:
-        stmt = stmt.where(func.lower(Profile.gender) == gender.lower())
-    if country_id is not None:
-        stmt = stmt.where(func.lower(Profile.country_id) == country_id.lower())
-    if age_group is not None:
-        stmt = stmt.where(func.lower(Profile.age_group) == age_group.lower())
+    filters = ProfileFilters(
+        gender=gender,
+        age_group=age_group,
+        country_id=country_id,
+        min_age=min_age,
+        max_age=max_age,
+        min_gender_probability=min_gender_probability,
+        min_country_probability=min_country_probability,
+    )
+    base = apply_filters(select(Profile), filters)
 
-    result = await session.execute(stmt)
-    profiles = result.scalars().all()
+    total = (
+        await session.execute(select(func.count()).select_from(base.subquery()))
+    ).scalar() or 0
+
+    sort_col = SORT_COLUMNS[sort_by]
+    ordered = base.order_by(sort_col.desc() if order == "desc" else sort_col.asc())
+    paged = ordered.limit(limit).offset((page - 1) * limit)
+
+    profiles = (await session.scalars(paged)).all()
     data = [_serialize(p) for p in profiles]
+
     return JSONResponse(
         status_code=200,
-        content={"status": "success", "count": len(data), "data": data},
+        content={
+            "status": "success",
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "data": data,
+        },
     )
 
 

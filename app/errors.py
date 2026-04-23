@@ -17,6 +17,8 @@ def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def _validation_handler(request: Request, exc: RequestValidationError):
         errors = exc.errors()
+        if any((err.get("loc") or ("body",))[0] == "query" for err in errors):
+            return error_response(422, "Invalid query parameters")
         first = errors[0] if errors else {}
         loc = first.get("loc", ())
         where = loc[0] if loc else "body"
