@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import Any
 
 from sqlalchemy import Select, func
@@ -15,6 +15,9 @@ class ProfileFilters:
     max_age: int | None = None
     min_gender_probability: float | None = None
     min_country_probability: float | None = None
+
+    def has_any(self) -> bool:
+        return any(getattr(self, f.name) is not None for f in fields(self))
 
 
 def apply_filters(stmt: Select[Any], f: ProfileFilters) -> Select[Any]:

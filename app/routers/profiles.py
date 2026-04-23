@@ -13,6 +13,7 @@ from app.errors import error_response
 from app.models import Profile
 from app.schemas import CreateProfileRequest, ProfileOut
 from app.services.external import enrich_name
+from app.services.nl_parser import parse_query
 from app.services.queries import ProfileFilters, apply_filters
 
 SORT_COLUMNS = {
@@ -109,6 +110,42 @@ async def list_profiles(
     ordered = base.order_by(sort_col.desc() if order == "desc" else sort_col.asc())
     paged = ordered.limit(limit).offset((page - 1) * limit)
 
+    profiles = (await session.scalars(paged)).all()
+    data = [_serialize(p) for p in profiles]
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": "success",
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "data": data,
+        },
+    )
+
+
+@router.get("/search")
+async def search_profiles(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    q: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=50),
+):
+    if q is None or q.strip() == "":
+        return error_response(400, "Missing or empty query")
+
+    filters = parse_query(q)
+    if not filters.has_any():
+        return error_response(400, "Unable to interpret query")
+
+    base = apply_filters(select(Profile), filters)
+    total = (
+        await session.execute(select(func.count()).select_from(base.subquery()))
+    ).scalar() or 0
+    paged = (
+        base.order_by(Profile.created_at.asc()).limit(limit).offset((page - 1) * limit)
+    )
     profiles = (await session.scalars(paged)).all()
     data = [_serialize(p) for p in profiles]
 
